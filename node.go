@@ -14,6 +14,14 @@ type req struct {
 	c   chan bool
 }
 
+type availabilityStatus int
+
+const (
+	statusNotAvailable availabilityStatus = iota
+	statusPartiallyAvailable
+	statusAvailable
+)
+
 type node struct {
 	id                      int
 	downloadBandwidth       float64
@@ -23,8 +31,8 @@ type node struct {
 	maxDownloadLinks        int
 	maxUploadLinks          int
 	connectedNodes          []*node
-	dataChunkAvailability   []int
-	parityChunkAvailability [][]int
+	dataChunkAvailability   []availabilityStatus
+	parityChunkAvailability [][]availabilityStatus
 	pool                    *[]*node
 	segfile                 *segfile
 	downc                   chan chunk
@@ -32,12 +40,12 @@ type node struct {
 	reqc                    chan req
 }
 
-func getRandomAvailability(ratio float64, numChunks int) []int {
-	availability := make([]int, numChunks)
+func getRandomAvailability(ratio float64, numChunks int) []availabilityStatus {
+	availability := make([]availabilityStatus, numChunks)
 	rand.Seed(time.Now().UnixNano())
 
 	for _, idx := range rand.Perm(numChunks)[:int(ratio*float64(numChunks))] {
-		availability[idx] = 2
+		availability[idx] = statusAvailable
 	}
 
 	return availability
@@ -55,7 +63,7 @@ func newNode(pool *[]*node, file *segfile, dlBandwidth float64, ulBandwidth floa
 		maxUploadLinks:          maxUploadLinks,
 		connectedNodes:          []*node{},
 		dataChunkAvailability:   getRandomAvailability(availabilityRatio, file.numDataChunks),
-		parityChunkAvailability: [][]int{},
+		parityChunkAvailability: [][]availabilityStatus{},
 		pool:    pool,
 		segfile: file,
 		downc:   make(chan chunk),
@@ -102,26 +110,26 @@ func (n *node) downloadLoop(c chan bool) {
 			if n.checkDownloadComplete() {
 				c <- true
 			} else {
-				n.receive(<-n.downc)
+				n.setAvailability(<-n.downc, statusAvailable)
 			}
 		} else {
 			if n.numDownloadLinks < n.maxDownloadLinks {
 				n.request(p, chk, resc)
 				if <-resc {
-					n.dataChunkAvailability[chk.idx] = 1
+					n.setAvailability(chk, statusPartiallyAvailable)
 					go n.transfer(p, chk)
 					n.numDownloadLinks++
 				}
 			} else {
 				// blocking wait
-				n.receive(<-n.downc)
+				n.setAvailability(<-n.downc, statusAvailable)
 				n.numDownloadLinks--
 			}
 
 			// non-blocking check
 			select {
 			case downchk := <-n.downc:
-				n.receive(downchk)
+				n.setAvailability(downchk, statusAvailable)
 				n.numDownloadLinks--
 			default:
 			}
@@ -129,14 +137,14 @@ func (n *node) downloadLoop(c chan bool) {
 	}
 }
 
-func (n *node) receive(chk chunk) {
-	n.dataChunkAvailability[chk.idx] = 2
+func (n *node) setAvailability(chk chunk, status availabilityStatus) {
+	n.dataChunkAvailability[chk.idx] = status
 }
 
 func (n *node) evaluateBestChunkPair() (p *node, chk chunk) {
 	for i := 0; i < n.segfile.numDataChunks; i++ {
 		for idx, iterp := range *n.pool {
-			if idx != n.id && n.dataChunkAvailability[i] == 0 && iterp.dataChunkAvailability[i] == 2 {
+			if idx != n.id && n.dataChunkAvailability[i] == statusNotAvailable && iterp.dataChunkAvailability[i] == statusAvailable {
 				return iterp, chunk{i, 0}
 			}
 		}
