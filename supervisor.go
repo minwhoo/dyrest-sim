@@ -42,7 +42,7 @@ func (sv *supervisor) getOptimalAction(n *node, connectedNodes map[*node]struct{
 	defer sv.availabilityTableLock.RUnlock()
 
 	for p := range sv.pool {
-		if _, ok := connectedNodes[p]; p != n && ok != true && p.complete {
+		if _, ok := connectedNodes[p]; p != n && ok != true {
 			for i := 0; i < sv.file.numDataChunks; i++ {
 				if sv.availabilityTable[n][i] == statusNotAvailable && sv.availabilityTable[p][i] == statusAvailable {
 					return action{p, chunk{i, 0}}

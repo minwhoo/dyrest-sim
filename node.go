@@ -78,9 +78,9 @@ func newNode(sv *supervisor, dlBandwidth float64, ulBandwidth float64, maxDownlo
 }
 
 func (n *node) checkDownloadComplete() bool {
-	for idx, val := range n.dataChunkAvailability {
+	for _, val := range n.dataChunkAvailability {
 		if val < 2 {
-			fmt.Println(idx, "not finished")
+			//fmt.Println(idx, "not finished")
 			return false
 		}
 	}
@@ -89,20 +89,21 @@ func (n *node) checkDownloadComplete() bool {
 
 func (n *node) start(wg *sync.WaitGroup) {
 	fmt.Println(n.id, "Starting node transfer")
-	if n.complete {
-		go n.listen()
-	} else {
+	go n.listen()
+	if !n.complete {
 		wg.Add(1)
 		go n.downloadLoop(wg)
 	}
 }
 
 func (n *node) transfer(act action) {
+	n.numDownloadLinks++
 	//chunkTransferTime := time.Duration(n.segfile.chunkSize / math.Min(n.downloadBandwidth, p.uploadBandwidth))
 	transferTime := time.Duration(200+rand.Intn(800)) * time.Millisecond
-	fmt.Printf("Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", act.chk.idx, act.p.id, n.id, transferTime)
+	//fmt.Printf("Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", act.chk.idx, act.p.id, n.id, transferTime)
 	time.Sleep(transferTime)
-	fmt.Println("Done!")
+	//fmt.Println("Done!")
+	n.numDownloadLinks--
 	n.downc <- act.chk
 	act.p.upc <- 1
 }
@@ -127,19 +128,16 @@ func (n *node) downloadLoop(wg *sync.WaitGroup) {
 				if <-resc {
 					n.setAvailability(act.chk, statusPartiallyAvailable)
 					go n.transfer(act)
-					n.numDownloadLinks++
 				}
 			} else {
 				// blocking wait
 				n.setAvailability(<-n.downc, statusAvailable)
-				n.numDownloadLinks--
 			}
 
 			// non-blocking check
 			select {
-			case downchk := <-n.downc:
-				n.setAvailability(downchk, statusAvailable)
-				n.numDownloadLinks--
+			case chk := <-n.downc:
+				n.setAvailability(chk, statusAvailable)
 			default:
 			}
 		}
