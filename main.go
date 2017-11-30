@@ -5,7 +5,7 @@ import (
 )
 
 func initializeNodes(pool *[]*node, file *segfile) {
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 10; i++ {
 		var ratio float64
 		if ratio = 0.5; i == 0 {
 			ratio = 1.0
@@ -26,6 +26,8 @@ func startSimulation() {
 	c := make(chan bool)
 	nodePool[0].startSeed()
 	nodePool[1].startDownload(c)
+	nodePool[2].startDownload(c)
+	nodePool[3].startDownload(c)
 	<-c //block
 	fmt.Println("Finished")
 	/* 	   END    */

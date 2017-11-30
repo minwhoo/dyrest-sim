@@ -9,9 +9,9 @@ import (
 var nodeIdx = 0
 
 type req struct {
-	n       *node
-	chunkId int
-	c       chan bool
+	n   *node
+	chk chunk
+	c   chan bool
 }
 
 type node struct {
@@ -27,7 +27,7 @@ type node struct {
 	parityChunkAvailability [][]int
 	pool                    *[]*node
 	segfile                 *segfile
-	downc                   chan int
+	downc                   chan chunk
 	upc                     chan int
 	reqc                    chan req
 }
@@ -58,7 +58,7 @@ func newNode(pool *[]*node, file *segfile, dlBandwidth float64, ulBandwidth floa
 		parityChunkAvailability: [][]int{},
 		pool:    pool,
 		segfile: file,
-		downc:   make(chan int),
+		downc:   make(chan chunk),
 		upc:     make(chan int),
 		reqc:    make(chan req),
 	}
@@ -84,42 +84,44 @@ func (n *node) startDownload(c chan bool) {
 	go n.downloadLoop(c)
 }
 
-func (n *node) transfer(p *node, chunkId int) {
+func (n *node) transfer(p *node, chk chunk) {
 	//chunkTransferTime := n.segfile.chunkSize / math.Min(n.downloadBandwidth, n.uploadBandwidth)
 	transferTime := time.Duration(200+rand.Intn(800)) * time.Millisecond
-	fmt.Printf("Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", chunkId, p.id, n.id, transferTime)
+	fmt.Printf("Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", chk.idx, p.id, n.id, transferTime)
 	time.Sleep(transferTime)
 	fmt.Println("Done!")
-	n.downc <- chunkId
-	p.upc <- chunkId
+	n.downc <- chk
+	p.upc <- 1
 }
 
 func (n *node) downloadLoop(c chan bool) {
 	resc := make(chan bool)
 	for {
-		p, chunkId := n.evaluateBestChunkPair()
-		if chunkId == -1 {
-			n.dataChunkAvailability[<-n.downc] = 2
+		p, chk := n.evaluateBestChunkPair()
+		if p == nil {
 			if n.checkDownloadComplete() {
 				c <- true
+			} else {
+				n.receive(<-n.downc)
 			}
 		} else {
 			if n.numDownloadLinks < n.maxDownloadLinks {
-				n.request(p, chunkId, resc)
+				n.request(p, chk, resc)
 				if <-resc {
-					n.dataChunkAvailability[chunkId] = 1
-					go n.transfer(p, chunkId)
+					n.dataChunkAvailability[chk.idx] = 1
+					go n.transfer(p, chk)
 					n.numDownloadLinks++
 				}
 			} else {
-				n.dataChunkAvailability[<-n.downc] = 2
-				fmt.Println("Transferring finally finished!!")
+				// blocking wait
+				n.receive(<-n.downc)
 				n.numDownloadLinks--
 			}
+
+			// non-blocking check
 			select {
-			case val := <-n.downc:
-				n.dataChunkAvailability[val] = 2
-				fmt.Println("Transferring finished!!")
+			case downchk := <-n.downc:
+				n.receive(downchk)
 				n.numDownloadLinks--
 			default:
 			}
@@ -127,31 +129,34 @@ func (n *node) downloadLoop(c chan bool) {
 	}
 }
 
-func (n *node) evaluateBestChunkPair() (p *node, chunkId int) {
-	p = (*n.pool)[0]
-	chunkId = -1
+func (n *node) receive(chk chunk) {
+	n.dataChunkAvailability[chk.idx] = 2
+}
+
+func (n *node) evaluateBestChunkPair() (p *node, chk chunk) {
 	for i := 0; i < n.segfile.numDataChunks; i++ {
-		if n.dataChunkAvailability[i] == 0 && p.dataChunkAvailability[i] == 2 {
-			chunkId = i
-			return
+		for idx, iterp := range *n.pool {
+			if idx != n.id && n.dataChunkAvailability[i] == 0 && iterp.dataChunkAvailability[i] == 2 {
+				return iterp, chunk{i, 0}
+			}
 		}
 	}
-	return
+	return nil, chunk{0, 0}
 }
 
 func (n *node) listen() {
 	for {
 		select {
 		case msg := <-n.reqc:
-			fmt.Println("received!", msg.chunkId)
+			fmt.Println("received!", msg.chk.idx)
 			n.respond(msg)
 		}
 	}
 }
 
-func (n *node) request(p *node, chunkId int, c chan bool) {
-	fmt.Println("Requesting chunk", chunkId, "...")
-	p.reqc <- req{n, chunkId, c}
+func (n *node) request(p *node, chk chunk, c chan bool) {
+	fmt.Println(n.id, ":Requesting chunk", chk.idx, "...")
+	p.reqc <- req{n, chk, c}
 }
 
 func (n *node) respond(msg req) {
