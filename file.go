@@ -1,5 +1,13 @@
 package main
 
+const (
+	_	   = iota
+	KB int = 1 << (10 * iota)
+	MB
+	GB
+	TB
+)
+
 type chunk struct {
 	id int
 }
@@ -14,6 +22,7 @@ type segfile struct {
 	segments    []segment
 	numSegments int
 	numDataChunks int
+	chunkSize int
 }
 
 // newSegfile creates segfile based on file size, segment length, and chunk size
@@ -43,5 +52,5 @@ func newSegfile(fileSize int, segmentLength int, chunkSize int) segfile {
 		segments[i] = segment{i, chunks, [][]chunk{}}
 	}
 
-	return segfile{segments, numSegments, numChunks}
+	return segfile{segments, numSegments, numChunks, chunkSize}
 }

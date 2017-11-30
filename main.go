@@ -12,7 +12,7 @@ func initializeNodes(pool *[]*node, file *segfile) {
 
 func startSimulation() {
 	fmt.Println("Starting simulation...")
-	segfile := newSegfile(12*1024, 10, 512)
+	segfile := newSegfile(12*MB, 10, 512*KB)
 	nodePool := []*node{}
 	initializeNodes(&nodePool, &segfile)
 	fmt.Println("Simulation done!")
