@@ -7,7 +7,7 @@ import (
 
 func initializeNodes(sv *supervisor) {
 	var n *node
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 2; i++ {
 		var ratio float64
 		if ratio = 0.5; i == 0 {
 			ratio = 1.0

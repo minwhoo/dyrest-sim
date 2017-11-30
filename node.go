@@ -121,6 +121,7 @@ func (n *node) downloadLoop(wg *sync.WaitGroup) {
 				n.setAvailability(<-n.downc, statusAvailable)
 			}
 		} else {
+			fmt.Println(n.id, ": node target", act.p.id, "selected")
 			if n.numDownloadLinks < n.maxDownloadLinks {
 				n.request(act, resc)
 				if <-resc {
@@ -147,6 +148,7 @@ func (n *node) downloadLoop(wg *sync.WaitGroup) {
 
 func (n *node) setAvailability(chk chunk, status availabilityStatus) {
 	n.dataChunkAvailability[chk.idx] = status
+	n.supervisor.updateAvailability(n, chk, status)
 }
 
 func (n *node) listen() {
