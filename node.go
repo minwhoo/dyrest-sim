@@ -24,6 +24,7 @@ const (
 
 type node struct {
 	id                      int
+	supervisor              *supervisor
 	downloadBandwidth       float64
 	uploadBandwidth         float64
 	numDownloadLinks        int
@@ -33,11 +34,10 @@ type node struct {
 	connectedNodes          map[*node]struct{}
 	dataChunkAvailability   []availabilityStatus
 	parityChunkAvailability [][]availabilityStatus
-	pool                    *[]*node
-	segfile                 *segfile
 	downc                   chan chunk
 	upc                     chan int
 	reqc                    chan req
+	complete                bool
 }
 
 func getRandomAvailability(ratio float64, numChunks int) []availabilityStatus {
@@ -51,10 +51,10 @@ func getRandomAvailability(ratio float64, numChunks int) []availabilityStatus {
 	return availability
 }
 
-func newNode(pool *[]*node, file *segfile, dlBandwidth float64, ulBandwidth float64, maxDownloadLinks int, maxUploadLinks int, availabilityRatio float64) {
-
+func newNode(sv *supervisor, dlBandwidth float64, ulBandwidth float64, maxDownloadLinks int, maxUploadLinks int, availabilityRatio float64) *node {
 	n := node{
 		id:                      nodeIdx,
+		supervisor:              sv,
 		downloadBandwidth:       dlBandwidth,
 		uploadBandwidth:         ulBandwidth,
 		numDownloadLinks:        0,
@@ -62,16 +62,18 @@ func newNode(pool *[]*node, file *segfile, dlBandwidth float64, ulBandwidth floa
 		maxDownloadLinks:        maxDownloadLinks,
 		maxUploadLinks:          maxUploadLinks,
 		connectedNodes:          make(map[*node]struct{}),
-		dataChunkAvailability:   getRandomAvailability(availabilityRatio, file.numDataChunks),
+		dataChunkAvailability:   getRandomAvailability(availabilityRatio, sv.file.numDataChunks),
 		parityChunkAvailability: [][]availabilityStatus{},
-		pool:    pool,
-		segfile: file,
-		downc:   make(chan chunk),
-		upc:     make(chan int),
-		reqc:    make(chan req),
+		downc:    make(chan chunk),
+		upc:      make(chan int),
+		reqc:     make(chan req),
+		complete: false,
+	}
+	if availabilityRatio == 1 {
+		n.complete = true
 	}
 	nodeIdx++
-	*pool = append(*pool, &n)
+	return &n
 }
 
 func (n *node) checkDownloadComplete() bool {
@@ -92,32 +94,33 @@ func (n *node) startDownload(c chan bool) {
 	go n.downloadLoop(c)
 }
 
-func (n *node) transfer(p *node, chk chunk) {
+func (n *node) transfer(act action) {
 	//chunkTransferTime := time.Duration(n.segfile.chunkSize / math.Min(n.downloadBandwidth, p.uploadBandwidth))
 	transferTime := time.Duration(200+rand.Intn(800)) * time.Millisecond
-	fmt.Printf("Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", chk.idx, p.id, n.id, transferTime)
+	fmt.Printf("Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", act.chk.idx, act.p.id, n.id, transferTime)
 	time.Sleep(transferTime)
 	fmt.Println("Done!")
-	n.downc <- chk
-	p.upc <- 1
+	n.downc <- act.chk
+	act.p.upc <- 1
 }
 
 func (n *node) downloadLoop(c chan bool) {
 	resc := make(chan bool)
 	for {
-		p, chk := n.evaluateBestChunkPair()
-		if p == nil {
+		act := n.supervisor.getOptimalAction(n, n.connectedNodes)
+		if act.p == nil {
 			if n.checkDownloadComplete() {
+				n.complete = true
 				c <- true
 			} else {
 				n.setAvailability(<-n.downc, statusAvailable)
 			}
 		} else {
 			if n.numDownloadLinks < n.maxDownloadLinks {
-				n.request(p, chk, resc)
+				n.request(act, resc)
 				if <-resc {
-					n.setAvailability(chk, statusPartiallyAvailable)
-					go n.transfer(p, chk)
+					n.setAvailability(act.chk, statusPartiallyAvailable)
+					go n.transfer(act)
 					n.numDownloadLinks++
 				}
 			} else {
@@ -141,17 +144,6 @@ func (n *node) setAvailability(chk chunk, status availabilityStatus) {
 	n.dataChunkAvailability[chk.idx] = status
 }
 
-func (n *node) evaluateBestChunkPair() (p *node, chk chunk) {
-	for i := 0; i < n.segfile.numDataChunks; i++ {
-		for idx, iterp := range *n.pool {
-			if idx != n.id && n.dataChunkAvailability[i] == statusNotAvailable && iterp.dataChunkAvailability[i] == statusAvailable {
-				return iterp, chunk{i, 0}
-			}
-		}
-	}
-	return nil, chunk{0, 0}
-}
-
 func (n *node) listen() {
 	for {
 		select {
@@ -162,9 +154,9 @@ func (n *node) listen() {
 	}
 }
 
-func (n *node) request(p *node, chk chunk, c chan bool) {
-	fmt.Println(n.id, ":Requesting chunk", chk.idx, "...")
-	p.reqc <- req{n, chk, c}
+func (n *node) request(act action, c chan bool) {
+	fmt.Println(n.id, ":Requesting chunk", act.chk.idx, "...")
+	act.p.reqc <- req{n, act.chk, c}
 }
 
 func (n *node) respond(msg req) {
