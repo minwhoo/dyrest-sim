@@ -85,7 +85,7 @@ func (n *node) startDownload(c chan bool) {
 }
 
 func (n *node) transfer(p *node, chk chunk) {
-	//chunkTransferTime := n.segfile.chunkSize / math.Min(n.downloadBandwidth, n.uploadBandwidth)
+	//chunkTransferTime := time.Duration(n.segfile.chunkSize / math.Min(n.downloadBandwidth, p.uploadBandwidth))
 	transferTime := time.Duration(200+rand.Intn(800)) * time.Millisecond
 	fmt.Printf("Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", chk.idx, p.id, n.id, transferTime)
 	time.Sleep(transferTime)

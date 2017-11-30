@@ -1,8 +1,8 @@
 package main
 
 const (
-	_      = iota
-	KB int = 1 << (10 * iota)
+	_          = iota
+	KB float64 = 1 << (10 * iota)
 	MB
 	GB
 	TB
@@ -29,8 +29,8 @@ type segfile struct {
 // newSegfile creates segfile based on file size, segment length, and chunk size
 // the unit for file size and chunk size should both be bytes, and chunk size should be evenly dividable by file size
 // the segment length denotes the number of data chunks in a segment
-func newSegfile(fileSize int, segmentLength int, chunkSize int) segfile {
-	numChunks := fileSize / chunkSize
+func newSegfile(fileSize float64, segmentLength int, chunkSize float64) segfile {
+	numChunks := int(fileSize / chunkSize)
 	numSegments := numChunks / segmentLength
 	rem := numChunks % segmentLength
 

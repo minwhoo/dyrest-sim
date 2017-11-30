@@ -10,7 +10,7 @@ func initializeNodes(pool *[]*node, file *segfile) {
 		if ratio = 0.5; i == 0 {
 			ratio = 1.0
 		}
-		newNode(pool, file, 100, 10, 5, 10, ratio)
+		newNode(pool, file, 1200*KB, 800*KB, 5, 10, ratio)
 	}
 }
 
