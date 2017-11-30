@@ -30,7 +30,7 @@ type node struct {
 	numUploadLinks          int
 	maxDownloadLinks        int
 	maxUploadLinks          int
-	connectedNodes          []*node
+	connectedNodes          map[*node]struct{}
 	dataChunkAvailability   []availabilityStatus
 	parityChunkAvailability [][]availabilityStatus
 	pool                    *[]*node
@@ -61,7 +61,7 @@ func newNode(pool *[]*node, file *segfile, dlBandwidth float64, ulBandwidth floa
 		numUploadLinks:          0,
 		maxDownloadLinks:        maxDownloadLinks,
 		maxUploadLinks:          maxUploadLinks,
-		connectedNodes:          []*node{},
+		connectedNodes:          make(map[*node]struct{}),
 		dataChunkAvailability:   getRandomAvailability(availabilityRatio, file.numDataChunks),
 		parityChunkAvailability: [][]availabilityStatus{},
 		pool:    pool,
