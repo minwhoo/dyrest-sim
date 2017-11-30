@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -86,12 +87,14 @@ func (n *node) checkDownloadComplete() bool {
 	return true
 }
 
-func (n *node) startSeed() {
-	go n.listen()
-}
-
-func (n *node) startDownload(c chan bool) {
-	go n.downloadLoop(c)
+func (n *node) start(wg *sync.WaitGroup) {
+	fmt.Println(n.id, "Starting node transfer")
+	if n.complete {
+		go n.listen()
+	} else {
+		wg.Add(1)
+		go n.downloadLoop(wg)
+	}
 }
 
 func (n *node) transfer(act action) {
@@ -104,14 +107,16 @@ func (n *node) transfer(act action) {
 	act.p.upc <- 1
 }
 
-func (n *node) downloadLoop(c chan bool) {
+func (n *node) downloadLoop(wg *sync.WaitGroup) {
+	defer wg.Done()
 	resc := make(chan bool)
 	for {
 		act := n.supervisor.getOptimalAction(n, n.connectedNodes)
 		if act.p == nil {
 			if n.checkDownloadComplete() {
+				fmt.Println(n.id, ": Download complete!")
 				n.complete = true
-				c <- true
+				break
 			} else {
 				n.setAvailability(<-n.downc, statusAvailable)
 			}

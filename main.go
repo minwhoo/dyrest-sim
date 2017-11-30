@@ -21,6 +21,7 @@ func startSimulation() {
 	fmt.Println("Starting simulation...")
 	var mutex1 sync.RWMutex
 	var mutex2 sync.RWMutex
+	var wg sync.WaitGroup
 	segfile := newSegfile(12*MB, 10, 512*KB)
 
 	sv := supervisor{
@@ -34,20 +35,14 @@ func startSimulation() {
 	initializeNodes(&sv)
 
 	/* TESTGROUND */
-	c := make(chan bool)
 	sv.poolLock.RLock()
 	for n := range sv.pool {
-		if n.complete {
-			n.startSeed()
-		} else {
-			n.startDownload(c)
-		}
+		n.start(&wg)
 	}
 	sv.poolLock.RUnlock()
-	<-c //block
-	fmt.Println("Finished")
 	/* 	   END    */
 
+	wg.Wait() // block
 	fmt.Println("Simulation done!")
 }
 
