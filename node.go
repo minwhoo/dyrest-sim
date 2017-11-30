@@ -27,9 +27,9 @@ type node struct {
 	parityChunkAvailability [][]int
 	pool                    *[]*node
 	segfile                 *segfile
-	down                    chan int
-	up                      chan int
-	c                       chan req
+	downc                   chan int
+	upc                     chan int
+	reqc                    chan req
 }
 
 func getRandomAvailability(ratio float64, numChunks int) []int {
@@ -58,9 +58,9 @@ func newNode(pool *[]*node, file *segfile, dlBandwidth float64, ulBandwidth floa
 		parityChunkAvailability: [][]int{},
 		pool:    pool,
 		segfile: file,
-		down:    make(chan int),
-		up:      make(chan int),
-		c:       make(chan req),
+		downc:   make(chan int),
+		upc:     make(chan int),
+		reqc:    make(chan req),
 	}
 	nodeIdx++
 	*pool = append(*pool, &n)
@@ -90,34 +90,34 @@ func (n *node) transfer(p *node, chunkId int) {
 	fmt.Printf("Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", chunkId, p.id, n.id, transferTime)
 	time.Sleep(transferTime)
 	fmt.Println("Done!")
-	n.down <- chunkId
-	p.up <- chunkId
+	n.downc <- chunkId
+	p.upc <- chunkId
 }
 
 func (n *node) downloadLoop(c chan bool) {
-	reqc := make(chan bool)
+	resc := make(chan bool)
 	for {
 		p, chunkId := n.evaluateBestChunkPair()
 		if chunkId == -1 {
-			n.dataChunkAvailability[<-n.down] = 2
+			n.dataChunkAvailability[<-n.downc] = 2
 			if n.checkDownloadComplete() {
 				c <- true
 			}
 		} else {
 			if n.numDownloadLinks < n.maxDownloadLinks {
-				n.request(p, chunkId, reqc)
-				if <-reqc {
+				n.request(p, chunkId, resc)
+				if <-resc {
 					n.dataChunkAvailability[chunkId] = 1
 					go n.transfer(p, chunkId)
 					n.numDownloadLinks++
 				}
 			} else {
-				n.dataChunkAvailability[<-n.down] = 2
+				n.dataChunkAvailability[<-n.downc] = 2
 				fmt.Println("Transferring finally finished!!")
 				n.numDownloadLinks--
 			}
 			select {
-			case val := <-n.down:
+			case val := <-n.downc:
 				n.dataChunkAvailability[val] = 2
 				fmt.Println("Transferring finished!!")
 				n.numDownloadLinks--
@@ -142,7 +142,7 @@ func (n *node) evaluateBestChunkPair() (p *node, chunkId int) {
 func (n *node) listen() {
 	for {
 		select {
-		case msg := <-n.c:
+		case msg := <-n.reqc:
 			fmt.Println("received!", msg.chunkId)
 			n.respond(msg)
 		}
@@ -151,7 +151,7 @@ func (n *node) listen() {
 
 func (n *node) request(p *node, chunkId int, c chan bool) {
 	fmt.Println("Requesting chunk", chunkId, "...")
-	p.c <- req{n, chunkId, c}
+	p.reqc <- req{n, chunkId, c}
 }
 
 func (n *node) respond(msg req) {
