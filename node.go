@@ -99,11 +99,8 @@ func (n *node) prepareTransfer(act action) {
 }
 
 func (n *node) transfer(act action) {
-	//chunkTransferTime := time.Duration(n.supervisor.file.chunkSize/act.bw*1000) * time.Millisecond
-	transferTime := time.Duration(200+rand.Intn(800)) * time.Millisecond
-	//fmt.Printf(":Tranferring chunk %v from node %v to node %v in %v milliseconds...\n", act.chk.idx, act.p.id, n.id, chunkTransferTime)
+	transferTime := time.Duration(n.supervisor.file.chunkSize/act.bw*1000) * time.Millisecond
 	time.Sleep(transferTime)
-	//fmt.Println("Done!")
 	n.downc <- act
 }
 
@@ -118,8 +115,9 @@ func (n *node) downloadLoop(wg *sync.WaitGroup) {
 	defer wg.Done()
 	//resc := make(chan bool)
 	var act action
+	var na, pa int
 	for {
-		if na, pa, _ := n.countAvailability(); na == 0 {
+		if na, pa, _ = n.countAvailability(); na == 0 {
 			if pa == 0 {
 				fmt.Println(n.id, ": Download complete!")
 				n.complete = true
@@ -130,15 +128,18 @@ func (n *node) downloadLoop(wg *sync.WaitGroup) {
 
 		act = n.supervisor.getOptimalAction(n, n.connectedNodes)
 		if act.p == nil {
-			goto block
+			if pa != 0 {
+				goto block
+			}
+		} else {
+			n.prepareTransfer(act)
+			go n.transfer(act)
 		}
-
-		n.prepareTransfer(act)
-		go n.transfer(act)
 
 		continue
 
 	block:
+		fmt.Println(n.id, "Blocked...")
 		n.transferDone(<-n.downc)
 	}
 }
