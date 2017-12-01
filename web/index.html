@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Title</title>
 </head>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 <script type="text/javascript">
     window.onload = function() {
         ws = new WebSocket("ws://localhost:8080/ws");
@@ -49,6 +50,8 @@
         if (!ws) {
             return false;
         }
+        var metadata = JSON.stringify(getFormData($('#form-init')));
+        console.log(metadata);
         ws.send("initialize");
     }
     function start() {
@@ -62,16 +65,26 @@
             return false;
         }
         ws.send("reset");
-        var elements = document.getElementsByClassName("node-div");
-        while(elements.length > 0){
-            elements[0].parentNode.removeChild(elements[0]);
-        }
+        $(".node-div").remove();
+    }
+    function getFormData($form){
+        var unindexed_array = $form.serializeArray();
+        var indexed_array = {};
+
+        $.map(unindexed_array, function(n, i){
+            indexed_array[n['name']] = n['value'];
+        });
+
+        return indexed_array;
     }
 </script>
 <style>
 </style>
 <body>
-<button onclick="initialize()">Initialize</button>
+<form id="form-init">
+    Number of nodes: <input type="text" name="NumNodes" value="10"><br/>
+</form>
+    <button onclick="initialize()">Initialize</button>
 <button onclick="start()">Start!</button>
 <button onclick="reset()">Reset</button>
 </body>
