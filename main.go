@@ -47,9 +47,9 @@ func (sm *simulationManager) initializeNodes() {
 		return
 	}
 	var n *node
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 100; i++ {
 		var ratio float64
-		if ratio = 0.5; i == 0 {
+		if ratio = 0.0; i == 2 {
 			ratio = 1.0
 		}
 		n = newNode(&(sm.supervisor), 10*MB, 1-1/math.E, ratio)

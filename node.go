@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -25,8 +26,14 @@ type node struct {
 	connectedNodes          map[*node]struct{}
 	dataChunkAvailability   []availabilityStatus
 	parityChunkAvailability [][]availabilityStatus
-	downc                   chan action
+	downc                   chan transferResult
 	complete                bool
+	simTime                 float64
+}
+
+type transferResult struct {
+	act        action
+	finishTime float64
 }
 
 func getRandomAvailability(ratio float64, numChunks int) []availabilityStatus {
@@ -49,8 +56,9 @@ func newNode(sv *supervisor, maxBandwidth float64, bandwidthRatio float64, avail
 		connectedNodes:          make(map[*node]struct{}),
 		dataChunkAvailability:   getRandomAvailability(availabilityRatio, sv.file.numDataChunks),
 		parityChunkAvailability: [][]availabilityStatus{},
-		downc:    make(chan action),
+		downc:    make(chan transferResult),
 		complete: false,
+		simTime:  0,
 	}
 	if availabilityRatio == 1 {
 		n.complete = true
@@ -99,9 +107,10 @@ func (n *node) prepareTransfer(act action) {
 }
 
 func (n *node) transfer(act action) {
-	transferTime := time.Duration(n.supervisor.file.chunkSize/act.bw*1000) * time.Millisecond
-	time.Sleep(transferTime)
-	n.downc <- act
+	chunkTransferTime := n.supervisor.file.chunkSize / act.bw
+	estFinSimTime := n.simTime + chunkTransferTime
+	time.Sleep(time.Duration(chunkTransferTime*1000) * time.Millisecond)
+	n.downc <- transferResult{act, estFinSimTime}
 }
 
 func (n *node) transferDone(act action) {
@@ -113,13 +122,12 @@ func (n *node) transferDone(act action) {
 
 func (n *node) downloadLoop(wg *sync.WaitGroup) {
 	defer wg.Done()
-	//resc := make(chan bool)
 	var act action
 	var na, pa int
 	for {
 		if na, pa, _ = n.countAvailability(); na == 0 {
 			if pa == 0 {
-				fmt.Println(n.id, ": Download complete!")
+				fmt.Println(n.id, ": Download complete!, total time taken: ", n.simTime)
 				n.complete = true
 				break
 			}
@@ -140,7 +148,9 @@ func (n *node) downloadLoop(wg *sync.WaitGroup) {
 
 	block:
 		fmt.Println(n.id, "Blocked...")
-		n.transferDone(<-n.downc)
+		result := <-n.downc
+		n.simTime = math.Max(n.simTime, result.finishTime)
+		n.transferDone(result.act)
 	}
 }
 
