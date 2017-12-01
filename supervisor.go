@@ -14,6 +14,10 @@ type supervisor struct {
 	availabilityTable     map[*node][]availabilityStatus
 	bwLock                sync.RWMutex
 	bw                    map[*node]float64
+	currentDownloadBwLock sync.RWMutex
+	currentDownloadBw     map[*node]float64
+	currentUploadBwLock   sync.RWMutex
+	currentUploadBw       map[*node]float64
 	file                  segfile
 }
 
@@ -53,19 +57,23 @@ func (sv *supervisor) removeNode(n *node) {
 	sv.bwLock.Unlock()
 }
 
-func (sv *supervisor) getOptimalAction(n *node, connectedNodes map[*node]struct{}, remainingBw float64) action {
+func (sv *supervisor) getOptimalAction(n *node, connectedNodes map[*node]struct{}) action {
 	sv.poolLock.RLock()
 	defer sv.poolLock.RUnlock()
 	sv.availabilityTableLock.RLock()
 	defer sv.availabilityTableLock.RUnlock()
 	sv.bwLock.RLock()
 	defer sv.bwLock.RUnlock()
+	sv.currentDownloadBwLock.RLock()
+	defer sv.currentDownloadBwLock.RUnlock()
+	sv.currentUploadBwLock.RLock()
+	defer sv.currentUploadBwLock.RUnlock()
 
 	for p := range sv.pool {
 		if _, ok := connectedNodes[p]; p != n && ok != true {
 			for i := 0; i < sv.file.numDataChunks; i++ {
 				if sv.availabilityTable[n][i] == statusNotAvailable && sv.availabilityTable[p][i] == statusAvailable {
-					if sv.bw[p] < remainingBw {
+					if sv.bw[p] <= p.getMaxUploadBw()-sv.currentUploadBw[p] && sv.bw[p] <= n.getMaxDownloadBw()-sv.currentDownloadBw[n] {
 						return action{p, chunk{i, 0}, sv.bw[p]}
 					}
 				}
@@ -74,6 +82,18 @@ func (sv *supervisor) getOptimalAction(n *node, connectedNodes map[*node]struct{
 	}
 
 	return action{nil, chunk{0, 0}, 0}
+}
+
+func (sv *supervisor) updateDownloadBw(n *node, deltaBw float64) {
+	sv.currentDownloadBwLock.Lock()
+	sv.currentDownloadBw[n] += deltaBw
+	sv.currentDownloadBwLock.Unlock()
+}
+
+func (sv *supervisor) updateUploadBw(n *node, deltaBw float64) {
+	sv.currentUploadBwLock.Lock()
+	sv.currentUploadBw[n] += deltaBw
+	sv.currentUploadBwLock.Unlock()
 }
 
 func (sv *supervisor) updateAvailability(n *node, chk chunk, status availabilityStatus) {
