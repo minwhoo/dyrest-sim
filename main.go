@@ -1,57 +1,87 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"math"
 	"sync"
 )
 
-func initializeNodes(sv *supervisor) {
+type simulationManager struct {
+	running     bool
+	initialized bool
+	supervisor  supervisor
+	waitgroup   sync.WaitGroup
+	c           chan []byte
+}
+
+func newSimulationManager() *simulationManager {
+	var mutex1, mutex2, mutex3, mutex4, mutex5 sync.RWMutex
+	var wg sync.WaitGroup
+
+	sv := supervisor{
+		poolLock: mutex1,
+		pool:     make(map[*node]struct{}),
+		availabilityTableLock: mutex2,
+		availabilityTable:     make(map[*node][]availabilityStatus),
+		bwLock:                mutex3,
+		bw:                    make(map[*node]float64),
+		currentDownloadBwLock: mutex4,
+		currentDownloadBw:     make(map[*node]float64),
+		currentUploadBwLock:   mutex5,
+		currentUploadBw:       make(map[*node]float64),
+		file:                  newSegfile(12*MB, 10, 512*KB),
+	}
+
+	sm := simulationManager{
+		running:     false,
+		initialized: false,
+		supervisor:  sv,
+		waitgroup:   wg,
+		c:           make(chan []byte),
+	}
+
+	return &sm
+}
+
+func (sm *simulationManager) initializeNodes() {
 	var n *node
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 3; i++ {
 		var ratio float64
 		if ratio = 0.5; i == 0 {
 			ratio = 1.0
 		}
-		n = newNode(sv, 10*MB, 1-1/math.E, ratio)
-		sv.addNode(n)
+		n = newNode(&(sm.supervisor), 10*MB, 1-1/math.E, ratio)
+		sm.supervisor.addNode(n)
 	}
+	sm.initialized = true
 }
 
-func startSimulation() {
-	fmt.Println("Starting simulation...")
-	var mutex1, mutex2, mutex3, mutex4, mutex5 sync.RWMutex
-	var wg sync.WaitGroup
-	segfile := newSegfile(12*MB, 10, 512*KB)
-
-	sv := supervisor{
-		mutex1,
-		make(map[*node]struct{}),
-		mutex2,
-		make(map[*node][]availabilityStatus),
-		mutex3,
-		make(map[*node]float64),
-		mutex4,
-		make(map[*node]float64),
-		mutex5,
-		make(map[*node]float64),
-		segfile,
+func (sm *simulationManager) start() {
+	if sm.running {
+		log.Println("Simulation already running!")
+		return
+	}
+	if !sm.initialized {
+		log.Println("Simulation not initialized!")
+		return
 	}
 
-	initializeNodes(&sv)
+	sm.running = true
+	log.Println("Starting simulation...")
 
-	/* TESTGROUND */
-	sv.poolLock.RLock()
-	for n := range sv.pool {
-		n.start(&wg)
+	sm.supervisor.poolLock.RLock()
+	for n := range sm.supervisor.pool {
+		n.start(&sm.waitgroup)
 	}
-	sv.poolLock.RUnlock()
-	/* 	   END    */
+	sm.supervisor.poolLock.RUnlock()
 
-	wg.Wait() // block
-	fmt.Println("Simulation done!")
+	sm.waitgroup.Wait() // block
+	log.Println("Simulation done!")
+	sm.running = false
 }
 
 func main() {
-	startSimulation()
+	sm := newSimulationManager()
+	sm.initializeNodes()
+	sm.start()
 }
