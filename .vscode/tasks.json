@@ -1,0 +1,29 @@
+{
+    "version": "0.1.0",
+    "command": "go", 
+    "options": {
+        "cwd": "${fileDirname}"
+    },
+    "isShellCommand": true,
+    "showOutput": "always", //silent
+    "echoCommand": true,
+    "tasks": [
+        {
+            "taskName": "build"
+        },
+        {
+            "taskName": "install",
+            "isBuildCommand": true
+        },
+        {
+            "taskName": "test",
+            "isTestCommand": true
+        },
+        {
+            "taskName": "run",
+            "args": [
+                "${file}"
+            ]
+        }
+    ]
+}
