@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script type="text/javascript">
+    window.onload = function() {
+        ws = new WebSocket("ws://localhost:8080/ws");
+
+        ws.onmessage = function (evt) {
+            var obj = JSON.parse(evt.data);
+            switch (obj["Code"]) {
+                case 0:
+                    addNode(obj["Data"]);
+                    break;
+                case 1:
+                    updateNodeStatus(obj["Data"]);
+                    break;
+            }
+        };
+
+        ws.onclose = function () {
+            var myTextArea = document.getElementById("textarea1");
+            myTextArea.value = myTextArea.value + "\n" + "Connection closed";
+        };
+
+    };
+    function updateNodeStatus(data) {
+        console.log(data);
+        document.getElementById(data["Id"]+"-"+data["Chunk"]["Idx"]).innerHTML = data["Status"]
+    }
+    function addNode(data) {
+            console.log(data);
+            var newdiv = document.createElement("div");
+            newdiv.setAttribute("class","node-div");
+            newdiv.setAttribute("id",data["Id"]);
+            var avail = data["Availability"];
+            for (var i = 0; i < avail.length; i++) {
+                var newp = document.createElement("span");
+                newp.appendChild(document.createTextNode(avail[i]));
+                newp.setAttribute("id",data["Id"]+"-"+i);
+                newdiv.appendChild(newp);
+                newdiv.appendChild(document.createTextNode(" "));
+            }
+            document.body.appendChild(newdiv)
+    }
+    function initialize() {
+        if (!ws) {
+            return false;
+        }
+        var metadata = JSON.stringify(getFormData($('#form-init')));
+        console.log(metadata);
+        ws.send("initialize");
+    }
+    function start() {
+        if (!ws) {
+            return false;
+        }
+        ws.send("start");
+    }
+    function reset() {
+        if (!ws) {
+            return false;
+        }
+        ws.send("reset");
+        $(".node-div").remove();
+    }
+    function getFormData($form){
+        var unindexed_array = $form.serializeArray();
+        var indexed_array = {};
+
+        $.map(unindexed_array, function(n, i){
+            indexed_array[n['name']] = n['value'];
+        });
+
+        return indexed_array;
+    }
+</script>
+<style>
+</style>
+<body>
+<form id="form-init">
+    Number of nodes: <input type="text" name="NumNodes" value="10"><br/>
+</form>
+    <button onclick="initialize()">Initialize</button>
+<button onclick="start()">Start!</button>
+<button onclick="reset()">Reset</button>
+</body>
+</html>

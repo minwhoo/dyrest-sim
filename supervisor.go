@@ -19,6 +19,7 @@ type supervisor struct {
 	currentUploadBwLock   sync.RWMutex
 	currentUploadBw       map[*node]float64
 	file                  segfile
+	lg                    logger
 }
 
 type action struct {
@@ -41,6 +42,16 @@ func (sv *supervisor) addNode(n *node) {
 	chunkDownloadTime := math.Max(0.1, random.NormFloat64()*0.3+0.6)
 	sv.bw[n] = sv.file.chunkSize / chunkDownloadTime
 	sv.bwLock.Unlock()
+
+	sv.currentDownloadBwLock.Lock()
+	sv.currentDownloadBw[n] = 0
+	sv.currentDownloadBwLock.Unlock()
+
+	sv.currentUploadBwLock.Lock()
+	sv.currentUploadBw[n] = 0
+	sv.currentUploadBwLock.Unlock()
+
+	sv.lg.logNodeAdded(n)
 }
 
 func (sv *supervisor) removeNode(n *node) {
@@ -55,6 +66,14 @@ func (sv *supervisor) removeNode(n *node) {
 	sv.bwLock.Lock()
 	delete(sv.bw, n)
 	sv.bwLock.Unlock()
+
+	sv.currentDownloadBwLock.Lock()
+	delete(sv.currentDownloadBw, n)
+	sv.currentDownloadBwLock.Unlock()
+
+	sv.currentUploadBwLock.Lock()
+	delete(sv.currentUploadBw, n)
+	sv.currentUploadBwLock.Unlock()
 }
 
 func (sv *supervisor) getOptimalAction(n *node, connectedNodes map[*node]struct{}) action {
@@ -100,4 +119,5 @@ func (sv *supervisor) updateAvailability(n *node, chk chunk, status availability
 	sv.availabilityTableLock.Lock()
 	sv.availabilityTable[n][chk.idx] = status
 	sv.availabilityTableLock.Unlock()
+	sv.lg.logNodeAvailabilityUpdated(n.id, chk, status)
 }
