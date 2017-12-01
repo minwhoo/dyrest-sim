@@ -15,19 +15,18 @@ type simulationManager struct {
 }
 
 func newSimulationManager() *simulationManager {
-	var mutex1, mutex2, mutex3, mutex4, mutex5 sync.RWMutex
 	var wg sync.WaitGroup
 
 	sv := supervisor{
-		poolLock: mutex1,
+		poolLock: sync.RWMutex{},
 		pool:     make(map[*node]struct{}),
-		availabilityTableLock: mutex2,
+		availabilityTableLock: sync.RWMutex{},
 		availabilityTable:     make(map[*node][]availabilityStatus),
-		bwLock:                mutex3,
+		bwLock:                sync.RWMutex{},
 		bw:                    make(map[*node]float64),
-		currentDownloadBwLock: mutex4,
+		currentDownloadBwLock: sync.RWMutex{},
 		currentDownloadBw:     make(map[*node]float64),
-		currentUploadBwLock:   mutex5,
+		currentUploadBwLock:   sync.RWMutex{},
 		currentUploadBw:       make(map[*node]float64),
 		file:                  newSegfile(12*MB, 10, 512*KB),
 	}
@@ -45,7 +44,7 @@ func newSimulationManager() *simulationManager {
 
 func (sm *simulationManager) initializeNodes() {
 	var n *node
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 10; i++ {
 		var ratio float64
 		if ratio = 0.5; i == 0 {
 			ratio = 1.0
