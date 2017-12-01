@@ -11,7 +11,6 @@ type simulationManager struct {
 	initialized bool
 	supervisor  supervisor
 	waitgroup   sync.WaitGroup
-	c           chan []byte
 }
 
 func newSimulationManager() *simulationManager {
@@ -29,6 +28,7 @@ func newSimulationManager() *simulationManager {
 		currentUploadBwLock:   sync.RWMutex{},
 		currentUploadBw:       make(map[*node]float64),
 		file:                  newSegfile(12*MB, 10, 512*KB),
+		lg:                    logger{make(chan []byte)},
 	}
 
 	sm := simulationManager{
@@ -36,15 +36,18 @@ func newSimulationManager() *simulationManager {
 		initialized: false,
 		supervisor:  sv,
 		waitgroup:   wg,
-		c:           make(chan []byte),
 	}
 
 	return &sm
 }
 
 func (sm *simulationManager) initializeNodes() {
+	if sm.initialized {
+		log.Println("SIM: ERROR Nodes already initialized!")
+		return
+	}
 	var n *node
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 16; i++ {
 		var ratio float64
 		if ratio = 0.5; i == 0 {
 			ratio = 1.0
@@ -53,20 +56,21 @@ func (sm *simulationManager) initializeNodes() {
 		sm.supervisor.addNode(n)
 	}
 	sm.initialized = true
+	log.Println("SIM: Nodes initialized...")
 }
 
 func (sm *simulationManager) start() {
 	if sm.running {
-		log.Println("Simulation already running!")
+		log.Println("SIM: ERROR Simulation already running!")
 		return
 	}
 	if !sm.initialized {
-		log.Println("Simulation not initialized!")
+		log.Println("SIM: ERROR Simulation not initialized!")
 		return
 	}
 
 	sm.running = true
-	log.Println("Starting simulation...")
+	log.Println("SIM: Starting simulation...")
 
 	sm.supervisor.poolLock.RLock()
 	for n := range sm.supervisor.pool {
@@ -75,12 +79,11 @@ func (sm *simulationManager) start() {
 	sm.supervisor.poolLock.RUnlock()
 
 	sm.waitgroup.Wait() // block
-	log.Println("Simulation done!")
+	log.Println("SIM: Simulation done!")
 	sm.running = false
 }
 
 func main() {
 	sm := newSimulationManager()
-	sm.initializeNodes()
-	sm.start()
+	startWebInterface(sm)
 }

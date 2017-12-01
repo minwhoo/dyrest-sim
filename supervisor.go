@@ -19,6 +19,7 @@ type supervisor struct {
 	currentUploadBwLock   sync.RWMutex
 	currentUploadBw       map[*node]float64
 	file                  segfile
+	lg                    logger
 }
 
 type action struct {
@@ -41,6 +42,7 @@ func (sv *supervisor) addNode(n *node) {
 	chunkDownloadTime := math.Max(0.1, random.NormFloat64()*0.3+0.6)
 	sv.bw[n] = sv.file.chunkSize / chunkDownloadTime
 	sv.bwLock.Unlock()
+	sv.lg.logNodeAdded(n)
 }
 
 func (sv *supervisor) removeNode(n *node) {
@@ -100,4 +102,5 @@ func (sv *supervisor) updateAvailability(n *node, chk chunk, status availability
 	sv.availabilityTableLock.Lock()
 	sv.availabilityTable[n][chk.idx] = status
 	sv.availabilityTableLock.Unlock()
+	sv.lg.logNodeAvailabilityUpdated(n.id, chk, status)
 }
