@@ -33,7 +33,7 @@
     function addNode(data) {
             console.log(data);
             var newdiv = document.createElement("div");
-            newdiv.setAttribute("class","#node-div");
+            newdiv.setAttribute("class","node-div");
             newdiv.setAttribute("id",data["Id"]);
             var avail = data["Availability"];
             for (var i = 0; i < avail.length; i++) {
@@ -57,14 +57,22 @@
         }
         ws.send("start");
     }
+    function reset() {
+        if (!ws) {
+            return false;
+        }
+        ws.send("reset");
+        var elements = document.getElementsByClassName("node-div");
+        while(elements.length > 0){
+            elements[0].parentNode.removeChild(elements[0]);
+        }
+    }
 </script>
 <style>
-    #node-div p {
-        float: left
-    }
 </style>
 <body>
 <button onclick="initialize()">Initialize</button>
 <button onclick="start()">Start!</button>
+<button onclick="reset()">Reset</button>
 </body>
 </html>

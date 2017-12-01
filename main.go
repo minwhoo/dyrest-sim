@@ -83,6 +83,31 @@ func (sm *simulationManager) start() {
 	sm.running = false
 }
 
+func (sm *simulationManager) reset() {
+	if sm.running {
+		log.Println("SIM: ERROR Simulation not finished yet!")
+		return
+	}
+	if !sm.initialized {
+		log.Println("SIM: ERROR Nothing to reset!")
+		return
+	}
+
+	pool := make(map[*node]struct{})
+
+	// copy list of nodes to delete
+	for n := range sm.supervisor.pool {
+		pool[n] = struct{}{}
+	}
+
+	for n := range pool {
+		sm.supervisor.removeNode(n)
+	}
+
+	sm.initialized = false
+	log.Println("SIM: Supervisor reset!")
+}
+
 func main() {
 	sm := newSimulationManager()
 	startWebInterface(sm)

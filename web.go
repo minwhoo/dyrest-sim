@@ -31,6 +31,8 @@ func readWebsocketConnection(sm *simulationManager, conn *websocket.Conn) {
 			sm.initializeNodes()
 		case "start":
 			sm.start()
+		case "reset":
+			sm.reset()
 		}
 	}
 }
