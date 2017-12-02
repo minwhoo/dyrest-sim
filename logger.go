@@ -15,7 +15,7 @@ type Message struct {
 
 type NodeData struct {
 	Id           int
-	Availability []availabilityStatus
+	Availability []segment
 }
 
 type NodeAvailabilityData struct {
@@ -34,19 +34,19 @@ const (
 )
 
 func (lg logger) logNodeAdded(n *node) {
-	data := NodeData{n.id, n.dataChunkAvailability}
+	data := NodeData{n.id, n.sf.segments}
 	msg, err := json.Marshal(Message{MessageNodeAdded, data})
 	if err == nil {
 		lg.c <- msg
 	}
 }
 
-func (lg logger) logNodeAvailabilityUpdated(id int, chk chunk, status availabilityStatus) {
+func (lg logger) logNodeAvailabilityUpdated(id int, chk chunkId, status availabilityStatus) {
 	data := NodeAvailabilityData{
 		id,
 		ChunkData{
-			chk.idx,
-			chk.r,
+			chk.cIdx,
+			chk.rIdx,
 		},
 		status,
 	}

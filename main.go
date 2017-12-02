@@ -6,29 +6,25 @@ import (
 	"sync"
 )
 
+var nodeIdx = 0
+
 type simulationManager struct {
 	running     bool
 	initialized bool
 	supervisor  supervisor
 	waitgroup   sync.WaitGroup
+	segfileInfo segfileInfo
 }
 
 func newSimulationManager() *simulationManager {
 	var wg sync.WaitGroup
 
 	sv := supervisor{
-		poolLock: sync.RWMutex{},
-		pool:     make(map[*node]struct{}),
-		availabilityTableLock: sync.RWMutex{},
-		availabilityTable:     make(map[*node][]availabilityStatus),
-		bwLock:                sync.RWMutex{},
-		bw:                    make(map[*node]float64),
-		currentDownloadBwLock: sync.RWMutex{},
-		currentDownloadBw:     make(map[*node]float64),
-		currentUploadBwLock:   sync.RWMutex{},
-		currentUploadBw:       make(map[*node]float64),
-		file:                  newSegfile(12*MB, 10, 512*KB),
-		lg:                    logger{make(chan []byte)},
+		poolLock:    sync.RWMutex{},
+		pool:        make(map[*node]struct{}),
+		bwRatioLock: sync.RWMutex{},
+		bwRatio:     make(map[*node]float64),
+		lg:          logger{make(chan []byte)},
 	}
 
 	sm := simulationManager{
@@ -36,23 +32,25 @@ func newSimulationManager() *simulationManager {
 		initialized: false,
 		supervisor:  sv,
 		waitgroup:   wg,
+		segfileInfo: newSegfileInfo(12*MB, 10, 512*KB),
 	}
 
 	return &sm
 }
 
 func (sm *simulationManager) initializeNodes() {
+	nodeIdx = 0
 	if sm.initialized {
 		log.Println("SIM: ERROR Nodes already initialized!")
 		return
 	}
 	var n *node
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 5; i++ {
 		var ratio float64
-		if ratio = 0.0; i == 2 {
-			ratio = 1.0
+		if ratio = 0.5; i == 0 {
+			ratio = 1
 		}
-		n = newNode(&(sm.supervisor), 10*MB, 1-1/math.E, ratio)
+		n = newNode(&sm.segfileInfo, 10*MB, 1-1/math.E, ratio)
 		sm.supervisor.addNode(n)
 	}
 	sm.initialized = true
@@ -74,7 +72,7 @@ func (sm *simulationManager) start() {
 
 	sm.supervisor.poolLock.RLock()
 	for n := range sm.supervisor.pool {
-		n.start(&sm.waitgroup)
+		n.start(&sm.supervisor, &sm.waitgroup)
 	}
 	sm.supervisor.poolLock.RUnlock()
 
@@ -110,5 +108,7 @@ func (sm *simulationManager) reset() {
 
 func main() {
 	sm := newSimulationManager()
-	startWebInterface(sm)
+	sm.initializeNodes()
+	sm.start()
+	//startWebInterface(sm)
 }
